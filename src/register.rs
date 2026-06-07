@@ -36,12 +36,12 @@ pub(crate) const NVM_DATA_MSB: u8 = 0x2D;
 
 pub(crate) const DSP_CONFIG: u8 = 0x30;
 pub(crate) const DSP_IIR: u8 = 0x31;
-pub(crate) const OOR_THR_P_LSB:u8 = 0x32;
-pub(crate) const OOR_THR_P_MSB:u8 = 0x33;
-pub(crate) const OOR_RANGE:u8 = 0x34;
-pub(crate) const OOR_CONFIG:u8 = 0x35;
+pub(crate) const OOR_THR_P_LSB: u8 = 0x32;
+pub(crate) const OOR_THR_P_MSB: u8 = 0x33;
+pub(crate) const OOR_RANGE: u8 = 0x34;
+pub(crate) const OOR_CONFIG: u8 = 0x35;
 pub(crate) const OSR_CONFIG: u8 = 0x36;
 pub(crate) const ODR_CONFIG: u8 = 0x37;
 pub(crate) const OSR_EFF: u8 = 0x38;
 
-pub(crate) const CMD: u8 = 0x70;
+pub(crate) const CMD: u8 = 0x7E;
