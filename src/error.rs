@@ -6,6 +6,7 @@ pub enum Error {
     ReadError,
     WriteError,
     InvalidId,
+    Timeout,
 }
 
 pub type Result<T> = core::result::Result<T, Error>;

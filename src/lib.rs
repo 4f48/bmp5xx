@@ -49,17 +49,27 @@ where
             .await
             .map_err(|_| Error::WriteError)?;
 
+        let mut timeout = 0;
         let mut status_buf = [0u8; 1];
         loop {
-            if let Ok(()) = self
+            #[allow(clippy::collapsible_if)]
+            if self
                 .i2c
                 .write_read(self.addr, &[STATUS], &mut status_buf)
                 .await
-                && (status_buf[0] & 0x01) != 0
+                .is_ok()
             {
-                break;
+                if (status_buf[0] & (1 << 1)) != 0 {
+                    break;
+                }
             };
-            self.delay.delay_ms(10).await;
+
+            if timeout >= 100 {
+                return Err(Error::Timeout);
+            }
+            timeout += 1;
+
+            self.delay.delay_ms(2).await;
         }
 
         Ok(())
