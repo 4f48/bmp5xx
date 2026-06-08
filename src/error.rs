@@ -6,6 +6,7 @@ pub enum Error {
     ReadError,
     WriteError,
     InvalidId,
+    NotReady,
     Timeout,
 }
 
