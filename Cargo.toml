@@ -1,5 +1,5 @@
 [package]
-name = "bmp58x"
+name = "bmp5xx"
 version = "0.1.0"
 edition = "2024"
 

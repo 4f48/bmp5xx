@@ -3,7 +3,7 @@
 version = 4
 
 [[package]]
-name = "bmp58x"
+name = "bmp5xx"
 version = "0.1.0"
 dependencies = [
  "byteorder",
