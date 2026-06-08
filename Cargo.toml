@@ -1,9 +1,15 @@
 [package]
 name = "bmp5xx"
 version = "0.1.0"
+authors = ["Olivér Pirger <oliver@pirger.eu>"]
 edition = "2024"
+rust-version = "1.85.1"
+description = "True-to-spec async I2C driver for the BMP580/BMP581/BMP585 barometric pressure sensors."
+repository = "https://codeberg.org/4f48/bmp5xx"
+license = "GPL-3.0-or-later"
+keywords = ["async", "embedded-hal", "pressure", "sensor"]
+categories = ["embedded", "no-std::no-alloc", "hardware-support"]
 
 [dependencies]
 byteorder = { version = "1.5.0", default-features = false }
 embedded-hal-async = "1.0.0"
-log = "0.4.32"
