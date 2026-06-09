@@ -19,19 +19,68 @@ use crate::{
     },
 };
 
-pub struct Bmp58x<I2C, D> {
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+#[repr(u8)]
+pub enum Oversampling {
+    X1 = 0x00,
+    X2 = 0x01,
+    X4 = 0x02,
+    X8 = 0x03,
+    X16 = 0x04,
+    X32 = 0x05,
+    X64 = 0x06,
+    X128 = 0x07,
+}
+
+impl Oversampling {
+    pub(crate) fn t_conv_t(&self) -> f32 {
+        match self {
+            Oversampling::X1 => 1.0,
+            Oversampling::X2 => 1.1,
+            Oversampling::X4 => 1.5,
+            Oversampling::X8 => 2.1,
+            Oversampling::X16 => 3.3,
+            Oversampling::X32 => 5.8,
+            Oversampling::X64 => 10.8,
+            Oversampling::X128 => 20.8,
+        }
+    }
+
+    pub(crate) fn t_conv_p(&self) -> f32 {
+        match self {
+            Oversampling::X1 => 1.0,
+            Oversampling::X2 => 1.7,
+            Oversampling::X4 => 2.9,
+            Oversampling::X8 => 5.4,
+            Oversampling::X16 => 10.4,
+            Oversampling::X32 => 20.4,
+            Oversampling::X64 => 40.4,
+            Oversampling::X128 => 80.4,
+        }
+    }
+}
+
+pub struct Bmp5xx<I2C, D> {
     i2c: I2C,
     delay: D,
     addr: u8,
+    osr_t: Oversampling,
+    osr_p: Oversampling,
 }
 
-impl<I2C, D> Bmp58x<I2C, D>
+impl<I2C, D> Bmp5xx<I2C, D>
 where
     I2C: I2c,
     D: DelayNs,
 {
     pub async fn new(i2c: I2C, delay: D, addr: u8) -> Result<Self> {
-        let mut bmp58x = Self { i2c, delay, addr };
+        let mut bmp58x = Self {
+            i2c,
+            delay,
+            addr,
+            osr_t: Oversampling::X1,
+            osr_p: Oversampling::X1,
+        };
 
         let mut id_buf = [0u8; 1];
         bmp58x
@@ -88,6 +137,14 @@ where
         Ok(())
     }
 
+    pub fn temperature_oversampling(&mut self, oversampling: Oversampling) {
+        self.osr_t = oversampling;
+    }
+
+    pub fn pressure_oversampling(&mut self, oversampling: Oversampling) {
+        self.osr_p = oversampling;
+    }
+
     pub async fn temperature(&mut self) -> Result<f32> {
         // switch to standby & disable deep standby
         self.i2c
@@ -95,9 +152,9 @@ where
             .await
             .map_err(|_| Error::WriteError)?;
 
-        // disable pressure measurement
+        // configure oversampling
         self.i2c
-            .write(self.addr, &[OSR_CONFIG, 0x00])
+            .write(self.addr, &[OSR_CONFIG, self.osr_t as u8])
             .await
             .map_err(|_| Error::WriteError)?;
 
@@ -107,8 +164,10 @@ where
             .await
             .map_err(|_| WriteError)?;
 
-        // t_conv_t (hardcoded OSR=1x)
-        self.delay.delay_us(1050).await;
+        // t_conv_t
+        self.delay
+            .delay_us((self.osr_t.t_conv_t() * 1050.0) as u32)
+            .await;
 
         let mut temp_buf = [0u8; 3];
         self.i2c
@@ -126,9 +185,15 @@ where
             .await
             .map_err(|_| Error::WriteError)?;
 
-        // enable pressure measurement
+        // configure oversampling, enable pressure measurement
         self.i2c
-            .write(self.addr, &[OSR_CONFIG, 0x40])
+            .write(
+                self.addr,
+                &[
+                    OSR_CONFIG,
+                    (1 << 6) | ((self.osr_p as u8) << 3) | self.osr_t as u8,
+                ],
+            )
             .await
             .map_err(|_| Error::WriteError)?;
 
@@ -138,8 +203,10 @@ where
             .await
             .map_err(|_| WriteError)?;
 
-        // t_conv_p (hardcoded OSR=1x)
-        self.delay.delay_us(1050).await;
+        // t_conv_p
+        self.delay
+            .delay_us((self.osr_p.t_conv_p() * 1050.0) as u32)
+            .await;
 
         let mut press_buf = [0u8; 3];
         self.i2c
