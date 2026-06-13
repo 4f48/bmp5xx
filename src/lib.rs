@@ -2,218 +2,177 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 #![no_std]
+#![warn(missing_docs)]
 
-pub mod error;
-pub(crate) mod register;
+//! True-to-spec async I2C driver for the BMP580/BMP581/BMP585 barometric pressure sensors.
+//! 
+//! ## Features
+//! - `no_std` compatible, works without an allocator
+//! - Widely compatible, generic over [`embedded_hal_async`] I2C traits
+//! - 100% documentation coverage
+//! - Based on Bosch Sensortec BMP581 datasheet, written by a human
+//! - Fully tested on real hardware: compatible with [Adafruit BMP581](https://www.adafruit.com/product/6407) development board
+//! 
+//! ## Usage
+//! 
+//! Getting started is easy:
+//! ```rs
+//! // initialize the sensor
+//! let bmp5 = Bmp5xx::new(i2c, Delay, 0x47);
+//! bmp5.init().await.unwrap();
+//! 
+//! // new pressure measurement
+//! let pressure = bmp5.meas_pres().await.unwrap();
+//! ```
+//! 
+//! Advanced operations:
+//! ```rs
+//! // change oversampling rate
+//! bmp5.osr_temp(Oversampling::X8);
+//! bmp5.osr_pres(Oversampling::X128);
+//! 
+//! // set up interrupts
+//! bmp5.int(Interrupt::default().enable(true)).await.unwrap();
+//! 
+//! // start continuous measurement
+//! bmp5.start_continuous(true).await.unwrap();
+//! ``` 
 
 use byteorder::{ByteOrder, LittleEndian};
 use embedded_hal_async::{delay::DelayNs, i2c::I2c};
 
 use crate::{
     error::{
-        Error::{self, WriteError},
+        Error::{InvalidId, NotReady, ReadError, WriteError},
         Result,
     },
-    register::{
-        CHIP_ID, CMD, INT_STATUS, ODR_CONFIG, OSR_CONFIG, PRESS_DATA_XLSB, STATUS, TEMP_DATA_XLSB,
-    },
+    osr::Oversampling,
+    register::{CHIP_ID, CMD, INT_STATUS, ODR_CONFIG, PRESS_DATA_XLSB, STATUS, TEMP_DATA_XLSB},
 };
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq)]
-#[repr(u8)]
-pub enum Oversampling {
-    X1 = 0x00,
-    X2 = 0x01,
-    X4 = 0x02,
-    X8 = 0x03,
-    X16 = 0x04,
-    X32 = 0x05,
-    X64 = 0x06,
-    X128 = 0x07,
-}
+mod continuous;
+pub mod error;
+mod forced;
+pub mod int;
+pub mod normal;
+pub mod osr;
+mod register;
 
-impl Oversampling {
-    pub(crate) fn t_conv_t(&self) -> f32 {
-        match self {
-            Oversampling::X1 => 1.0,
-            Oversampling::X2 => 1.1,
-            Oversampling::X4 => 1.5,
-            Oversampling::X8 => 2.1,
-            Oversampling::X16 => 3.3,
-            Oversampling::X32 => 5.8,
-            Oversampling::X64 => 10.8,
-            Oversampling::X128 => 20.8,
-        }
-    }
-
-    pub(crate) fn t_conv_p(&self) -> f32 {
-        match self {
-            Oversampling::X1 => 1.0,
-            Oversampling::X2 => 1.7,
-            Oversampling::X4 => 2.9,
-            Oversampling::X8 => 5.4,
-            Oversampling::X16 => 10.4,
-            Oversampling::X32 => 20.4,
-            Oversampling::X64 => 40.4,
-            Oversampling::X128 => 80.4,
-        }
-    }
-}
-
+/// Async I2C driver compatible with BMP580/BMP581/BMP585 barometric pressure sensors.
 pub struct Bmp5xx<I2C, D> {
     i2c: I2C,
     delay: D,
     addr: u8,
+
     osr_t: Oversampling,
     osr_p: Oversampling,
 }
 
+// Basic functions and operations.
 impl<I2C, D> Bmp5xx<I2C, D>
 where
     I2C: I2c,
     D: DelayNs,
 {
-    pub async fn new(i2c: I2C, delay: D, addr: u8) -> Result<Self> {
-        let mut bmp58x = Self {
+    /// Creates a new driver instance.
+    pub fn new(i2c: I2C, delay: D, addr: u8) -> Self {
+        Self {
             i2c,
             delay,
             addr,
+
             osr_t: Oversampling::X1,
             osr_p: Oversampling::X1,
-        };
-
-        let mut id_buf = [0u8; 1];
-        bmp58x
-            .i2c
-            .write_read(addr, &[CHIP_ID], &mut id_buf)
-            .await
-            .map_err(|_| Error::ReadError)?;
-        match id_buf[0] {
-            0x50 | 0x51 => (),
-            _ => return Err(Error::InvalidId),
         }
-
-        bmp58x.reset().await?;
-
-        let mut status_buf = [0u8; 1];
-        bmp58x
-            .i2c
-            .write_read(bmp58x.addr, &[STATUS], &mut status_buf)
-            .await
-            .map_err(|_| Error::ReadError)?;
-        if status_buf[0] & 0x02 == 0 || status_buf[0] & 0x04 != 0 {
-            return Err(Error::NotReady);
-        }
-
-        let mut int_status_buf = [0u8; 1];
-        bmp58x
-            .i2c
-            .write_read(bmp58x.addr, &[INT_STATUS], &mut int_status_buf)
-            .await
-            .map_err(|_| Error::ReadError)?;
-        if int_status_buf[0] & (1 << 4) == 0 {
-            return Err(Error::NotReady);
-        }
-
-        // switch to standby & disable deep standby
-        bmp58x
-            .i2c
-            .write(bmp58x.addr, &[ODR_CONFIG, 0x80])
-            .await
-            .map_err(|_| Error::WriteError)?;
-
-        Ok(bmp58x)
     }
 
+    /// Triggers a software reset on the sensor. Takes about 2 ms.
     pub async fn reset(&mut self) -> Result<()> {
         // trigger reset
         self.i2c
             .write(self.addr, &[CMD, 0xB6])
             .await
-            .map_err(|_| Error::WriteError)?;
+            .map_err(|_| WriteError)?;
 
         // t_soft_res
         self.delay.delay_ms(2).await;
+
         Ok(())
     }
 
-    pub fn temperature_oversampling(&mut self, oversampling: Oversampling) {
-        self.osr_t = oversampling;
+    /// Initializes the sensor and readies it for further operations.
+    /// Run this before starting other operations, otherwise the sensor may behave unexpectedly.
+    /// You only need to initialize the sensor once.
+    pub async fn init(&mut self) -> Result<()> {
+        let mut id_buf = [0u8; 1];
+        self.i2c
+            .write_read(self.addr, &[CHIP_ID], &mut id_buf)
+            .await
+            .map_err(|_| ReadError)?;
+        match id_buf[0] {
+            0x50 | 0x51 => (),
+            _ => return Err(InvalidId),
+        }
+
+        self.reset().await?;
+
+        let mut status_buf = [0u8; 1];
+        self.i2c
+            .write_read(self.addr, &[STATUS], &mut status_buf)
+            .await
+            .map_err(|_| ReadError)?;
+        if status_buf[0] & 0x02 == 0 || status_buf[0] & 0x04 != 0 {
+            return Err(NotReady);
+        }
+
+        let mut int_status_buf = [0u8; 1];
+        self.i2c
+            .write_read(self.addr, &[INT_STATUS], &mut int_status_buf)
+            .await
+            .map_err(|_| ReadError)?;
+        if int_status_buf[0] & 0x10 == 0 {
+            return Err(NotReady);
+        }
+
+        Ok(())
     }
+}
 
-    pub fn pressure_oversampling(&mut self, oversampling: Oversampling) {
-        self.osr_p = oversampling;
-    }
-
-    pub async fn temperature(&mut self) -> Result<f32> {
-        // switch to standby & disable deep standby
-        self.i2c
-            .write(self.addr, &[ODR_CONFIG, 0x80])
-            .await
-            .map_err(|_| Error::WriteError)?;
-
-        // configure oversampling
-        self.i2c
-            .write(self.addr, &[OSR_CONFIG, self.osr_t as u8])
-            .await
-            .map_err(|_| Error::WriteError)?;
-
-        // switch to forced & disable deep standby
-        self.i2c
-            .write(self.addr, &[ODR_CONFIG, 0x82])
-            .await
-            .map_err(|_| WriteError)?;
-
-        // t_conv_t
-        self.delay
-            .delay_us((self.osr_t.t_conv_t() * 1050.0) as u32)
-            .await;
-
+// Generic functions and operations.
+impl<I2C, D> Bmp5xx<I2C, D>
+where
+    I2C: I2c,
+    D: DelayNs,
+{
+    /// Reads the latest temperature reading in degrees Celsius (°C), useful for normal and continuous mode operation.
+    ///
+    /// This doesn't initialize a new measurement, use [`meas_temp`](Self::meas_temp) for that.
+    pub async fn read_temp(&mut self) -> Result<f32> {
         let mut temp_buf = [0u8; 3];
         self.i2c
             .write_read(self.addr, &[TEMP_DATA_XLSB], &mut temp_buf)
             .await
-            .map_err(|_| Error::ReadError)?;
-        let raw_temp = LittleEndian::read_i24(&temp_buf);
-        Ok(raw_temp as f32 / 65536.0)
+            .map_err(|_| ReadError)?;
+        Ok(LittleEndian::read_i24(&temp_buf) as f32 / 65536.0)
     }
 
-    pub async fn pressure(&mut self) -> Result<f32> {
-        // switch to standby & disable deep standby
+    /// Reads the latest pressure reading in hectopascals (hPa), useful for normal and continuous mode operation.
+    ///
+    /// This doesn't initialize a new measurement, use [`meas_pres`](Self::meas_pres) for that.
+    pub async fn read_pres(&mut self) -> Result<f32> {
+        let mut pres_buf = [0u8; 3];
         self.i2c
-            .write(self.addr, &[ODR_CONFIG, 0x80])
+            .write_read(self.addr, &[PRESS_DATA_XLSB], &mut pres_buf)
             .await
-            .map_err(|_| Error::WriteError)?;
+            .map_err(|_| ReadError)?;
+        Ok(LittleEndian::read_i24(&pres_buf) as f32 / 64.0 / 100.0)
+    }
 
-        // configure oversampling, enable pressure measurement
+    /// Stop measurement and return the sensor to standby mode.
+    pub async fn stop(&mut self) -> Result<()> {
         self.i2c
-            .write(
-                self.addr,
-                &[
-                    OSR_CONFIG,
-                    (1 << 6) | ((self.osr_p as u8) << 3) | self.osr_t as u8,
-                ],
-            )
+            .write(self.addr, &[ODR_CONFIG, 0x00])
             .await
-            .map_err(|_| Error::WriteError)?;
-
-        // switch to forced & disable deep standby
-        self.i2c
-            .write(self.addr, &[ODR_CONFIG, 0x82])
-            .await
-            .map_err(|_| WriteError)?;
-
-        // t_conv_p
-        self.delay
-            .delay_us((self.osr_p.t_conv_p() * 1050.0) as u32)
-            .await;
-
-        let mut press_buf = [0u8; 3];
-        self.i2c
-            .write_read(self.addr, &[PRESS_DATA_XLSB], &mut press_buf)
-            .await
-            .map_err(|_| Error::ReadError)?;
-        let raw_press = LittleEndian::read_i24(&press_buf);
-        Ok(raw_press as f32 / 64.0 / 100.0)
+            .map_err(|_| WriteError)
     }
 }
