@@ -56,6 +56,7 @@ mod forced;
 pub mod iir;
 pub mod int;
 pub mod normal;
+pub mod oor;
 pub mod osr;
 mod register;
 

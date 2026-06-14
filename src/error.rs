@@ -21,6 +21,10 @@ pub enum Error {
     Timeout,
     /// The set output data rate is incompatible with the oversampling settings.
     OdrInvalid,
+    /// The input wasn't compatible with the constraints of the operation.
+    BadInput,
+    /// The `min` value is larger than the `max` value.
+    InvalidMinMax,
 }
 
 /// A specialised [`Result`](core::result::Result) type for this crate.

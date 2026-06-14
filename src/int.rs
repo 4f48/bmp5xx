@@ -39,6 +39,12 @@ impl Interrupt {
         self
     }
 
+    /// Configure interrupt sources.
+    pub fn sources(mut self, source: IntSource) -> Self {
+        self.source = source;
+        self
+    }
+
     /// Sets interrupt mode.
     pub fn mode(mut self, mode: IntMode) -> Self {
         self.mode = mode;
