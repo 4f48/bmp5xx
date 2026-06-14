@@ -14,7 +14,7 @@ True-to-spec async I2C driver for the BMP580/BMP581/BMP585 barometric pressure s
 Getting started is easy:
 ```rs
 // initialize the sensor
-let bmp5 = Bmp5xx::new(i2c, Delay, 0x47);
+let mut bmp5 = Bmp5xx::new(i2c, Delay, 0x47);
 bmp5.init().await.unwrap();
 
 // new pressure measurement

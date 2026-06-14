@@ -1,6 +1,6 @@
 [package]
 name = "bmp5xx"
-version = "2.0.0"
+version = "2.1.0"
 authors = ["Olivér Pirger <oliver@pirger.eu>"]
 edition = "2024"
 rust-version = "1.85.1"

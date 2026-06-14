@@ -6,7 +6,11 @@
 
 use embedded_hal_async::{delay::DelayNs, i2c::I2c};
 
-use crate::{Bmp5xx, error::{Error::WriteError, Result}, register::ODR_CONFIG};
+use crate::{
+    Bmp5xx,
+    error::{Error::WriteError, Result},
+    register::ODR_CONFIG,
+};
 
 impl<I2C, D> Bmp5xx<I2C, D>
 where

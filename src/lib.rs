@@ -5,38 +5,38 @@
 #![warn(missing_docs)]
 
 //! True-to-spec async I2C driver for the BMP580/BMP581/BMP585 barometric pressure sensors.
-//! 
+//!
 //! ## Features
 //! - `no_std` compatible, works without an allocator
 //! - Widely compatible, generic over [`embedded_hal_async`] I2C traits
 //! - 100% documentation coverage
 //! - Based on Bosch Sensortec BMP581 datasheet, written by a human
 //! - Fully tested on real hardware: compatible with [Adafruit BMP581](https://www.adafruit.com/product/6407) development board
-//! 
+//!
 //! ## Usage
-//! 
+//!
 //! Getting started is easy:
 //! ```rs
 //! // initialize the sensor
-//! let bmp5 = Bmp5xx::new(i2c, Delay, 0x47);
+//! let mut bmp5 = Bmp5xx::new(i2c, Delay, 0x47);
 //! bmp5.init().await.unwrap();
-//! 
+//!
 //! // new pressure measurement
 //! let pressure = bmp5.meas_pres().await.unwrap();
 //! ```
-//! 
+//!
 //! Advanced operations:
 //! ```rs
 //! // change oversampling rate
 //! bmp5.osr_temp(Oversampling::X8);
 //! bmp5.osr_pres(Oversampling::X128);
-//! 
+//!
 //! // set up interrupts
 //! bmp5.int(Interrupt::default().enable(true)).await.unwrap();
-//! 
+//!
 //! // start continuous measurement
 //! bmp5.start_continuous(true).await.unwrap();
-//! ``` 
+//! ```
 
 use byteorder::{ByteOrder, LittleEndian};
 use embedded_hal_async::{delay::DelayNs, i2c::I2c};
@@ -53,6 +53,7 @@ use crate::{
 mod continuous;
 pub mod error;
 mod forced;
+pub mod iir;
 pub mod int;
 pub mod normal;
 pub mod osr;

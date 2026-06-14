@@ -95,7 +95,7 @@ where
     /// Use [`stop`](Self::stop) to stop the measurements.
     ///
     /// Warning: this returns an error if the oversampling configuration is incompatible with the output data rate given.
-    /// 
+    ///
     /// Note: using interrupts is highly recommended for normal mode.
     pub async fn start_normal(&mut self, press_en: bool, odr: OutputDataRate) -> Result<()> {
         self.stop().await?;
