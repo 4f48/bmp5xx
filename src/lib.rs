@@ -6,12 +6,18 @@
 
 //! True-to-spec async I2C driver for the BMP580/BMP581/BMP585 barometric pressure sensors.
 //!
-//! ## Features
 //! - `no_std` compatible, works without an allocator
 //! - Widely compatible, generic over [`embedded_hal_async`] I2C traits
 //! - 100% documentation coverage
 //! - Based on Bosch Sensortec BMP581 datasheet, written by a human
-//! - Fully tested on real hardware: compatible with [Adafruit BMP581](https://www.adafruit.com/product/6407) development board
+//! - Fully tested on real hardware: compatible with [Adafruit BMP580](https://www.adafruit.com/product/6411) and [Adafruit BMP581](https://www.adafruit.com/product/6407) development boards
+//! - Working examples in the repository
+//! 
+//! ## Features
+//! - Normal, forced, and continuous mode measurements
+//! - Configurable interrupts
+//! - Out-of-range configuration
+//! - Oversampling, IIR filtering
 //!
 //! ## Usage
 //!

@@ -1,0 +1,17 @@
+[package]
+name = "bmp5xx-examples-rp2040"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
+publish = false
+
+[dependencies]
+cortex-m-rt = "0.7.5"
+embassy-executor = { version = "0.10.0", features = ["executor-thread", "platform-cortex-m"] }
+embassy-rp = { version = "0.10.0", features = ["critical-section-impl", "rp2040", "time-driver"] }
+embassy-time = "0.5.1"
+embassy-usb-logger = "0.6.0"
+log = "0.4.33"
+panic-reset = "0.1.1"
+
+bmp5xx = { path = "../../" }
