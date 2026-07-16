@@ -40,4 +40,7 @@ bmp5.int(Interrupt::default().enable(true)).await.unwrap();
 bmp5.start_continuous(true).await.unwrap();
 ```
 
+### Demo
+If you don't have hardware to try it, check out the demo video: https://youtu.be/RD1FmZXssCE 
+
 License: GPL-3.0-or-later
